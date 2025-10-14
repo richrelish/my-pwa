@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Drawing App</title>
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#2196f3">
+  <style>
+    html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: white; touch-action: none; font-family: sans-serif; }
+    canvas { display: block; width: 100%; height: 100%; cursor: crosshair; }
+    #toolbar { position: fixed; bottom: 0; left: 0; width: 100%; background: rgba(240,240,240,0.95); display: flex; justify-content: space-around; align-items: center; padding: 10px 0; box-shadow: 0 -2px 5px rgba(0,0,0,0.1); }
+    .menu { position: relative; }
+    .collapsible { position: absolute; bottom: 45px; background: white; border: 1px solid #ccc; border-radius: 6px; box-shadow: 0 2px 5px rgba(0,0,0,0.2); padding: 5px; display: none; }
+    .collapsible.show { display: block; }
+    .color-option, .weight-option { display: inline-block; margin: 5px; cursor: pointer; }
+    .color-option { width: 24px; height: 24px; border-radius: 50%; border: 2px solid #ccc; }
+    .weight-option { width: 30px; height: 10px; border-radius: 5px; background: #666; }
+    .icon-btn { background: none; border: none; cursor: pointer; font-size: 22px; padding: 8px 12px; border-radius: 8px; transition: background 0.2s, transform 0.1s; }
+    .icon-btn:active { transform: scale(0.95); }
+    #trashIcon.active { background: #ffcccc; color: red; }
+    #install-btn { position: fixed; top: 10px; right: 10px; padding: 10px 15px; border: none; background: #2196f3; color: white; border-radius: 6px; font-size: 16px; display: none; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+  <div id="toolbar">
+    <div class="menu">
+      <button class="icon-btn" id="colorMenuBtn">🎨</button>
+      <div class="collapsible" id="colorMenu">
+        <div class="color-option" style="background:red;" data-color="red"></div>
+        <div class="color-option" style="background:blue;" data-color="blue"></div>
+        <div class="color-option" style="background:green;" data-color="green"></div>
+        <div class="color-option" style="background:black;" data-color="black"></div>
+        <div class="color-option" style="background:orange;" data-color="orange"></div>
+      </div>
+    </div>
+    <div class="menu">
+      <button class="icon-btn" id="weightMenuBtn">🖊️</button>
+      <div class="collapsible" id="weightMenu">
+        <div class="weight-option" data-weight="2" style="height:2px;"></div>
+        <div class="weight-option" data-weight="5" style="height:5px;"></div>
+        <div class="weight-option" data-weight="10" style="height:10px;"></div>
+        <div class="weight-option" data-weight="20" style="height:20px;"></div>
+      </div>
+    </div>
+    <button class="icon-btn" id="trashIcon">🗑️</button>
+  </div>
+  <button id="install-btn">Install App</button>
+  <script>
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    let lines = [], currentLine = null, isDrawing = false;
+    let currentColor = 'black', currentWeight = 3, deleteMode = false;
+    let pressTimer = null, firstLineOriginalColor = null;
+    function resizeCanvas() { const ratio = window.devicePixelRatio || 1; canvas.width = window.innerWidth * ratio; canvas.height = window.innerHeight * ratio; ctx.setTransform(ratio, 0, 0, ratio, 0, 0); redraw(); }
+    window.addEventListener('resize', resizeCanvas); resizeCanvas();
+    canvas.addEventListener('pointerdown', e => { const rect = canvas.getBoundingClientRect(); const x = e.clientX - rect.left; const y = e.clientY - rect.top; if (deleteMode) { deleteTouchedLine(x, y); return; } isDrawing = true; currentLine = { points: [{x,y}], color: currentColor, weight: currentWeight }; lines.push(currentLine); });
+    canvas.addEventListener('pointermove', e => { if (!isDrawing || deleteMode) return; const rect = canvas.getBoundingClientRect(); const x = e.clientX - rect.left; const y = e.clientY - rect.top; currentLine.points.push({x,y}); redraw(); });
+    canvas.addEventListener('pointerup', () => isDrawing = false);
+    canvas.addEventListener('pointercancel', () => isDrawing = false);
+    function redraw() { ctx.clearRect(0, 0, canvas.width, canvas.height); for (const line of lines) { if (!line.points.length) continue; ctx.strokeStyle = line.color; ctx.lineWidth = line.weight; ctx.lineJoin = ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(line.points[0].x, line.points[0].y); for (let i=1; i<line.points.length; i++) ctx.lineTo(line.points[i].x, line.points[i].y); ctx.stroke(); } }
+    function deleteTouchedLine(x, y) { const thresholdBase = 10; for (let i = 0; i < lines.length; i++) { const line = lines[i]; const threshold = thresholdBase + line.weight; for (let j = 1; j < line.points.length; j++) { const p1 = line.points[j-1], p2 = line.points[j]; const dist = pointToSegmentDistance({x,y}, p1, p2); if (dist <= threshold) { lines.splice(i, 1); redraw(); return; } } } }
+    function pointToSegmentDistance(p, a, b) { const A = p.x - a.x, B = p.y - a.y, C = b.x - a.x, D = b.y - a.y; const dot = A*C + B*D; const lenSq = C*C + D*D; let param = lenSq !== 0 ? dot / lenSq : -1; let xx, yy; if (param < 0) { xx = a.x; yy = a.y; } else if (param > 1) { xx = b.x; yy = b.y; } else { xx = a.x + param * C; yy = a.y + param * D; } const dx = p.x - xx, dy = p.y - yy; return Math.sqrt(dx*dx + dy*dy); }
+    const colorMenuBtn = document.getElementById('colorMenuBtn'); const weightMenuBtn = document.getElementById('weightMenuBtn'); const colorMenu = document.getElementById('colorMenu'); const weightMenu = document.getElementById('weightMenu'); const trashIcon = document.getElementById('trashIcon');
+    colorMenuBtn.addEventListener('click', () => { colorMenu.classList.toggle('show'); weightMenu.classList.remove('show'); }); weightMenuBtn.addEventListener('click', () => { weightMenu.classList.toggle('show'); colorMenu.classList.remove('show'); });
+    document.querySelectorAll('.color-option').forEach(c => { c.addEventListener('click', () => { currentColor = c.dataset.color; colorMenu.classList.remove('show'); }); });
+    document.querySelectorAll('.weight-option').forEach(w => { w.addEventListener('click', () => { currentWeight = parseInt(w.dataset.weight); weightMenu.classList.remove('show'); }); });
+    trashIcon.addEventListener('click', () => { deleteMode = !deleteMode; trashIcon.classList.toggle('active', deleteMode); canvas.style.cursor = deleteMode ? 'not-allowed' : 'crosshair'; });
+    trashIcon.addEventListener('pointerdown', () => { pressTimer = setTimeout(() => { if (lines.length > 0) { const firstLine = lines[0]; firstLineOriginalColor = firstLine.color; firstLine.color = '#00ffff'; redraw(); } }, 1000); });
+    trashIcon.addEventListener('pointerup', () => { clearTimeout(pressTimer); if (firstLineOriginalColor && lines.length > 0) { lines[0].color = firstLineOriginalColor; firstLineOriginalColor = null; redraw(); } });
+    trashIcon.addEventListener('pointerleave', () => { clearTimeout(pressTimer); if (firstLineOriginalColor && lines.length > 0) { lines[0].color = firstLineOriginalColor; firstLineOriginalColor = null; redraw(); } });
+    if ('serviceWorker' in navigator) { navigator.serviceWorker.register('service-worker.js').then(() => console.log('Service Worker registered')).catch(err => console.log('SW registration failed:', err)); }
+    let deferredPrompt; window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); deferredPrompt = e; document.getElementById('install-btn').style.display = 'block'; });
+    document.getElementById('install-btn').addEventListener('click', async () => { deferredPrompt.prompt(); const result = await deferredPrompt.userChoice; console.log('Install choice:', result.outcome); deferredPrompt = null; document.getElementById('install-btn').style.display = 'none'; });
+  </script>
+</body>
+</html>
