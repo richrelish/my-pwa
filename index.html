@@ -20,6 +20,11 @@
     .icon-btn:active { transform: scale(0.95); }
     #trashIcon.active { background: #ffcccc; color: red; }
     #install-btn { position: fixed; top: 10px; right: 10px; padding: 10px 15px; border: none; background: #2196f3; color: white; border-radius: 6px; font-size: 16px; display: none; cursor: pointer; }
+    #settingsOverlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: none; justify-content: center; align-items: center; z-index: 1000; }
+    #settingsBox { background: white; padding: 20px 30px; border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.3); text-align: center; position: relative; }
+    #settingsBox h3 { margin-top: 0; }
+    #closeSettings { position: absolute; top: 8px; right: 10px; background: none; border: none; font-size: 18px; cursor: pointer; }
+    #lineNumberInput { width: 60px; padding: 5px; font-size: 16px; text-align: center; }
   </style>
 </head>
 <body>
@@ -47,6 +52,13 @@
     <button class="icon-btn" id="trashIcon">🗑️</button>
   </div>
   <button id="install-btn">Install App</button>
+  <div id="settingsOverlay">
+    <div id="settingsBox">
+      <button id="closeSettings">×</button>
+      <h3>Select Line Number for Teal Highlight</h3>
+      <input type="number" id="lineNumberInput" min="1" max="10">
+    </div>
+  </div>
   <script>
     const canvas = document.getElementById('canvas');
     const ctx = canvas.getContext('2d');
@@ -62,14 +74,26 @@
     function redraw() { ctx.clearRect(0, 0, canvas.width, canvas.height); for (const line of lines) { if (!line.points.length) continue; ctx.strokeStyle = line.color; ctx.lineWidth = line.weight; ctx.lineJoin = ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(line.points[0].x, line.points[0].y); for (let i=1; i<line.points.length; i++) ctx.lineTo(line.points[i].x, line.points[i].y); ctx.stroke(); } }
     function deleteTouchedLine(x, y) { const thresholdBase = 10; for (let i = 0; i < lines.length; i++) { const line = lines[i]; const threshold = thresholdBase + line.weight; for (let j = 1; j < line.points.length; j++) { const p1 = line.points[j-1], p2 = line.points[j]; const dist = pointToSegmentDistance({x,y}, p1, p2); if (dist <= threshold) { lines.splice(i, 1); redraw(); return; } } } }
     function pointToSegmentDistance(p, a, b) { const A = p.x - a.x, B = p.y - a.y, C = b.x - a.x, D = b.y - a.y; const dot = A*C + B*D; const lenSq = C*C + D*D; let param = lenSq !== 0 ? dot / lenSq : -1; let xx, yy; if (param < 0) { xx = a.x; yy = a.y; } else if (param > 1) { xx = b.x; yy = b.y; } else { xx = a.x + param * C; yy = a.y + param * D; } const dx = p.x - xx, dy = p.y - yy; return Math.sqrt(dx*dx + dy*dy); }
-    const colorMenuBtn = document.getElementById('colorMenuBtn'); const weightMenuBtn = document.getElementById('weightMenuBtn'); const colorMenu = document.getElementById('colorMenu'); const weightMenu = document.getElementById('weightMenu'); const trashIcon = document.getElementById('trashIcon');
-    colorMenuBtn.addEventListener('click', () => { colorMenu.classList.toggle('show'); weightMenu.classList.remove('show'); }); weightMenuBtn.addEventListener('click', () => { weightMenu.classList.toggle('show'); colorMenu.classList.remove('show'); });
+    const colorMenuBtn = document.getElementById('colorMenuBtn'); const weightMenuBtn = document.getElementById('weightMenuBtn');
+    const colorMenu = document.getElementById('colorMenu'); const weightMenu = document.getElementById('weightMenu'); const trashIcon = document.getElementById('trashIcon');
+    colorMenuBtn.addEventListener('click', () => { colorMenu.classList.toggle('show'); weightMenu.classList.remove('show'); });
+    weightMenuBtn.addEventListener('click', () => { weightMenu.classList.toggle('show'); colorMenu.classList.remove('show'); });
     document.querySelectorAll('.color-option').forEach(c => { c.addEventListener('click', () => { currentColor = c.dataset.color; colorMenu.classList.remove('show'); }); });
     document.querySelectorAll('.weight-option').forEach(w => { w.addEventListener('click', () => { currentWeight = parseInt(w.dataset.weight); weightMenu.classList.remove('show'); }); });
     trashIcon.addEventListener('click', () => { deleteMode = !deleteMode; trashIcon.classList.toggle('active', deleteMode); canvas.style.cursor = deleteMode ? 'not-allowed' : 'crosshair'; });
-    trashIcon.addEventListener('pointerdown', () => { pressTimer = setTimeout(() => { if (lines.length > 0) { const firstLine = lines[0]; firstLineOriginalColor = firstLine.color; firstLine.color = '#00ffff'; redraw(); } }, 1000); });
-    trashIcon.addEventListener('pointerup', () => { clearTimeout(pressTimer); if (firstLineOriginalColor && lines.length > 0) { lines[0].color = firstLineOriginalColor; firstLineOriginalColor = null; redraw(); } });
-    trashIcon.addEventListener('pointerleave', () => { clearTimeout(pressTimer); if (firstLineOriginalColor && lines.length > 0) { lines[0].color = firstLineOriginalColor; firstLineOriginalColor = null; redraw(); } });
+    const settingsOverlay = document.getElementById('settingsOverlay');
+    const closeSettings = document.getElementById('closeSettings');
+    const lineNumberInput = document.getElementById('lineNumberInput');
+    let settingsTimer = null;
+    let selectedLineNumber = parseInt(localStorage.getItem('tealLineNumber')) || 1;
+    lineNumberInput.value = selectedLineNumber;
+    weightMenuBtn.addEventListener('pointerdown', () => { settingsTimer = setTimeout(() => { settingsOverlay.style.display = 'flex'; }, 2000); });
+    weightMenuBtn.addEventListener('pointerup', () => clearTimeout(settingsTimer));
+    weightMenuBtn.addEventListener('pointerleave', () => clearTimeout(settingsTimer));
+    closeSettings.addEventListener('click', () => { settingsOverlay.style.display = 'none'; const val = parseInt(lineNumberInput.value); if (val >= 1 && val <= 10) { selectedLineNumber = val; localStorage.setItem('tealLineNumber', selectedLineNumber); } });
+    trashIcon.addEventListener('pointerdown', () => { pressTimer = setTimeout(() => { if (lines.length >= selectedLineNumber) { const targetLine = lines[selectedLineNumber - 1]; firstLineOriginalColor = targetLine.color; targetLine.color = '#00ffff'; redraw(); } }, 1000); });
+    trashIcon.addEventListener('pointerup', () => { clearTimeout(pressTimer); if (firstLineOriginalColor && lines.length >= selectedLineNumber) { lines[selectedLineNumber - 1].color = firstLineOriginalColor; firstLineOriginalColor = null; redraw(); } });
+    trashIcon.addEventListener('pointerleave', () => { clearTimeout(pressTimer); if (firstLineOriginalColor && lines.length >= selectedLineNumber) { lines[selectedLineNumber - 1].color = firstLineOriginalColor; firstLineOriginalColor = null; redraw(); } });
     if ('serviceWorker' in navigator) { navigator.serviceWorker.register('service-worker.js').then(() => console.log('Service Worker registered')).catch(err => console.log('SW registration failed:', err)); }
     let deferredPrompt; window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); deferredPrompt = e; document.getElementById('install-btn').style.display = 'block'; });
     document.getElementById('install-btn').addEventListener('click', async () => { deferredPrompt.prompt(); const result = await deferredPrompt.userChoice; console.log('Install choice:', result.outcome); deferredPrompt = null; document.getElementById('install-btn').style.display = 'none'; });
