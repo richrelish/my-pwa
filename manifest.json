@@ -1,6 +1,6 @@
 {
   "name": "Drawing App",
-  "short_name": "Draw",
+  "short_name": "Draw-It",
   "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#ffffff",
